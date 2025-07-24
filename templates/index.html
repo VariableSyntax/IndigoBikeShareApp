@@ -1,0 +1,453 @@
+<!--🖼️ Basic HTML Form--> 
+
+<!doctype html>
+<html lang="en" data-bs-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <title>Indego Bike Tracker</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Bootstrap -->
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+  />
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Leaflet -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"
+  />
+  <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+
+  <!-- Leaflet Routing Machine -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.css"
+  />
+  <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.min.js"></script>
+
+  <style>
+    #map {
+      height: 400px;
+      width: 100%;
+    }
+
+    body {
+      padding: 20px;
+      background-color: var(--bs-body-bg);
+    }
+
+    .custom-label {
+      background: none;
+      border: none;
+      box-shadow: none;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <div
+      class="d-flex justify-content-between align-items-center mb-4"
+    >
+      <h1 class="text-primary">🚲 Indego Bike Tracker</h1>
+      <button
+        class="btn btn-outline-secondary"
+        id="toggleTheme"
+        title="Toggle Light/Dark Mode"
+      >
+        🌗 Toggle Theme
+      </button>
+    </div>
+
+    <!-- Search History -->
+    <div class="mb-3">
+      <h5 class="text-secondary">🔁 Previous Searches:</h5>
+      <ul id="searchHistory" class="list-group list-group-flush"></ul>
+    </div>
+
+    <!-- Search Form -->
+    <div class="card shadow-sm mb-4">
+      <div class="card-body">
+        <form method="post" id="locationForm" class="row g-3">
+          <input type="hidden" id="latitude" name="latitude" required />
+          <input type="hidden" id="longitude" name="longitude" required />
+
+          <div class="col-md-4">
+            <label for="radius" class="form-label">Search Radius (miles)</label>
+            <input
+              type="number"
+              class="form-control"
+              id="radius"
+              name="radius"
+              value="1.0"
+              step="0.1"
+              min="0.1"
+            />
+          </div>
+
+          <div class="col-md-4">
+            <label for="min_bikes" class="form-label">Min Available Bikes</label>
+            <input
+              type="number"
+              class="form-control"
+              name="min_bikes"
+              value="1"
+              min="0"
+            />
+          </div>
+
+          <div class="col-md-4">
+            <label for="min_docks" class="form-label">Min Available Docks</label>
+            <input
+              type="number"
+              class="form-control"
+              name="min_docks"
+              value="0"
+              min="0"
+            />
+          </div>
+
+          <div class="col-12 text-end">
+            <button type="submit" class="btn btn-primary mt-3">
+              🔍 Find Bikes
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    {% if stations %}
+    <!-- Map Section -->
+    <h2 class="text-info">Map View</h2>
+    <div class="card shadow-sm mb-4">
+      <div class="card-body">
+        <div id="map"></div>
+      </div>
+    </div>
+
+    <!-- Travel Mode Selector -->
+    <div class="mb-3">
+      <label for="travelMode" class="form-label">🚶 Select Travel Mode:</label>
+      <select
+        id="travelMode"
+        class="form-select"
+        style="max-width: 200px"
+        title="Choose travel mode for routes"
+      >
+        <option value="walking">Walking</option>
+        <option value="cycling">Biking</option>
+        <option value="driving">Driving</option>
+      </select>
+    </div>
+
+    <!-- Filters -->
+    <div class="row g-3 mb-3">
+      <div class="col-auto">
+        <label for="maxDistance" class="form-label"
+          >Max Route Distance (miles):</label
+        >
+        <input
+          type="number"
+          id="maxDistance"
+          class="form-control"
+          min="0"
+          step="0.1"
+          placeholder="No limit"
+          title="Hide stations farther than this distance"
+        />
+      </div>
+      <div class="col-auto">
+        <label for="maxTime" class="form-label"
+          >Max Route Time (minutes):</label
+        >
+        <input
+          type="number"
+          id="maxTime"
+          class="form-control"
+          min="0"
+          step="1"
+          placeholder="No limit"
+          title="Hide stations longer than this travel time"
+        />
+      </div>
+      <div class="col-auto align-self-end">
+        <button id="applyFilters" class="btn btn-outline-primary" title="Filter stations"
+          >Apply Filters</button
+        >
+      </div>
+    </div>
+
+    <!-- Station List and Recent Clicks -->
+    <div class="row">
+      <div class="col-lg-6 mb-4">
+        <h2 class="text-success">Nearby Stations</h2>
+        <div class="list-group" id="stationList">
+          {% for station in stations %}
+          <a
+            href="#"
+            class="list-group-item list-group-item-action"
+            data-station="{{ station.name }}"
+            data-lat="{{ station.lat }}"
+            data-lon="{{ station.lon }}"
+            title="Click to show route"
+          >
+            <h5 class="mb-1">{{ station.name }}</h5>
+            <p class="mb-1">📍 {{ station.distance }} miles away</p>
+            <small
+              >🚲 Bikes: <strong>{{ station.bikesAvailable }}</strong> | 🅿️
+              Docks: <strong>{{ station.docksAvailable }}</strong> | 🕒 ETA:
+              <span class="eta">Calculating...</span></small
+            >
+          </a>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="col-lg-6">
+        <h5 class="text-secondary">📌 Recently Clicked Stations:</h5>
+        <ul id="clickedStations" class="list-group list-group-flush"></ul>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <script>
+    let userLatLng = null;
+    let routingControl = null;
+    let stationsWithRouteInfo = [];
+
+    // Utils
+    function metersToMiles(m) {
+      return m / 1609.34;
+    }
+    function secondsToMinutes(s) {
+      return Math.round(s / 60);
+    }
+
+    // Fetch route info from OSRM API
+    async function fetchRouteInfo(userLatLng, stationLatLng, mode) {
+      const profile = mode;
+      const url = `https://router.project-osrm.org/route/v1/${profile}/` +
+        `${userLatLng[1]},${userLatLng[0]};${stationLatLng[1]},${stationLatLng[0]}?overview=false`;
+
+      try {
+        const response = await fetch(url);
+        const data = await response.json();
+        if (data.routes && data.routes.length > 0) {
+          return {
+            distance: data.routes[0].distance,
+            duration: data.routes[0].duration,
+          };
+        }
+      } catch (e) {
+        console.warn("Failed to fetch route info", e);
+      }
+      return null;
+    }
+
+    // Calculate ETA/time for all stations
+    async function calculateAllETAs() {
+      if (!userLatLng) return;
+
+      const mode = document.getElementById("travelMode").value;
+      const stationElements = [...document.querySelectorAll("[data-station]")];
+      stationsWithRouteInfo = [];
+
+      await Promise.all(
+        stationElements.map(async (el) => {
+          const lat = parseFloat(el.getAttribute("data-lat"));
+          const lon = parseFloat(el.getAttribute("data-lon"));
+          const etaSpan = el.querySelector(".eta");
+
+          const routeInfo = await fetchRouteInfo(userLatLng, [lat, lon], mode);
+
+          if (routeInfo) {
+            const miles = metersToMiles(routeInfo.distance).toFixed(2);
+            const mins = secondsToMinutes(routeInfo.duration);
+
+            etaSpan.textContent = `${mins} min (${miles} mi)`;
+
+            stationsWithRouteInfo.push({
+              el,
+              distanceMeters: routeInfo.distance,
+              durationSec: routeInfo.duration,
+            });
+          } else {
+            etaSpan.textContent = "N/A";
+          }
+        })
+      );
+
+      applyFilters();
+    }
+
+    // Filter stations based on distance/time
+    function applyFilters() {
+      const maxDist = parseFloat(document.getElementById("maxDistance").value);
+      const maxTime = parseFloat(document.getElementById("maxTime").value);
+
+      stationsWithRouteInfo.forEach(({ el, distanceMeters, durationSec }) => {
+        const showByDist =
+          isNaN(maxDist) || metersToMiles(distanceMeters) <= maxDist;
+        const showByTime = isNaN(maxTime) || secondsToMinutes(durationSec) <= maxTime;
+
+        el.style.display = showByDist && showByTime ? "" : "none";
+      });
+    }
+
+    document.addEventListener("DOMContentLoaded", function () {
+      // Geolocation & User marker
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          function (position) {
+            const lat = position.coords.latitude;
+            const lon = position.coords.longitude;
+            userLatLng = [lat, lon];
+
+            document.getElementById("latitude").value = lat;
+            document.getElementById("longitude").value = lon;
+
+            if (typeof L !== "undefined" && typeof map !== "undefined") {
+              const labelIcon = L.divIcon({
+                html: `<div style="color: red; font-weight: bold; text-align: center;">
+                        You are here<br>
+                        <img src="https://maps.google.com/mapfiles/ms/icons/red-dot.png">
+                      </div>`,
+                className: "custom-label",
+                iconSize: [60, 40],
+                iconAnchor: [30, 40],
+              });
+
+              L.marker([lat, lon], { icon: labelIcon }).addTo(map);
+            }
+
+            calculateAllETAs();
+          },
+          () => alert("Could not get your location.")
+        );
+      }
+
+      // Theme toggle
+      const root = document.documentElement;
+      const toggleBtn = document.getElementById("toggleTheme");
+      const storedTheme = localStorage.getItem("theme");
+      if (storedTheme) root.setAttribute("data-bs-theme", storedTheme);
+
+      toggleBtn.addEventListener("click", () => {
+        const current = root.getAttribute("data-bs-theme");
+        const next = current === "dark" ? "light" : "dark";
+        root.setAttribute("data-bs-theme", next);
+        localStorage.setItem("theme", next);
+      });
+
+      // Auto-refresh every 5 minutes
+      setInterval(() => document.getElementById("locationForm").submit(), 300000);
+
+      // Search history
+      const form = document.getElementById("locationForm");
+      form.addEventListener("submit", () => {
+        const radius = document.getElementById("radius").value;
+        const bikes = document.querySelector("[name='min_bikes']").value;
+        const docks = document.querySelector("[name='min_docks']").value;
+        const history = JSON.parse(localStorage.getItem("searches") || "[]");
+        const entry = `Radius: ${radius}mi, Bikes: ${bikes}, Docks: ${docks}`;
+        if (!history.includes(entry)) {
+          history.unshift(entry);
+          localStorage.setItem("searches", JSON.stringify(history.slice(0, 5)));
+        }
+      });
+
+      const historyList = document.getElementById("searchHistory");
+      const history = JSON.parse(localStorage.getItem("searches") || "[]");
+      history.forEach((entry) => {
+        const li = document.createElement("li");
+        li.className = "list-group-item small";
+        li.textContent = entry;
+        historyList.appendChild(li);
+      });
+
+      // Recently clicked stations
+      const clickedList = document.getElementById("clickedStations");
+      const clickedStorage = JSON.parse(localStorage.getItem("clickedStations") || "[]");
+
+      function renderClicked() {
+        clickedList.innerHTML = "";
+        clickedStorage.slice(0, 5).forEach((name) => {
+          const li = document.createElement("li");
+          li.textContent = name;
+          li.className = "list-group-item small";
+          clickedList.appendChild(li);
+        });
+      }
+
+      renderClicked();
+
+      // Handle station clicks to show route & update clicked stations list
+      document.querySelectorAll("[data-station]").forEach((el) => {
+        el.addEventListener("click", () => {
+          const name = el.getAttribute("data-station");
+          const lat = parseFloat(el.getAttribute("data-lat"));
+          const lon = parseFloat(el.getAttribute("data-lon"));
+          const mode = document.getElementById("travelMode").value;
+
+          // Update clicked history
+          const idx = clickedStorage.indexOf(name);
+          if (idx !== -1) clickedStorage.splice(idx, 1);
+          clickedStorage.unshift(name);
+          localStorage.setItem(
+            "clickedStations",
+            JSON.stringify(clickedStorage.slice(0, 5))
+          );
+          renderClicked();
+
+          // Draw route on map
+          if (userLatLng && typeof L.Routing !== "undefined") {
+            if (routingControl) map.removeControl(routingControl);
+            routingControl = L.Routing.control({
+              waypoints: [
+                L.latLng(userLatLng[0], userLatLng[1]),
+                L.latLng(lat, lon),
+              ],
+              router: L.Routing.osrmv1({
+                profile: mode, // walking | cycling | driving
+              }),
+              createMarker: () => null,
+              routeWhileDragging: false,
+            }).addTo(map);
+          }
+        });
+      });
+
+      // Recalculate ETAs on travel mode change
+      document
+        .getElementById("travelMode")
+        .addEventListener("change", calculateAllETAs);
+
+      // Apply filters button
+      document
+        .getElementById("applyFilters")
+        .addEventListener("click", applyFilters);
+    });
+  </script>
+
+  {% if stations %}
+  <script>
+    // Initialize Leaflet map only if stations are present
+    let map = L.map("map").setView([{{ stations[0].lat }}, {{ stations[0].lon }}], 14);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "© OpenStreetMap contributors",
+    }).addTo(map);
+
+    // Add markers for each station
+    {% for station in stations %}
+      L.marker([{{ station.lat }}, {{ station.lon }}]).addTo(map)
+        .bindPopup("<b>{{ station.name }}</b><br>🚲 Bikes: {{ station.bikesAvailable }}<br>🅿️ Docks: {{ station.docksAvailable }}");
+    {% endfor %}
+  </script>
+  {% endif %}
+</body>
+</html>
+
